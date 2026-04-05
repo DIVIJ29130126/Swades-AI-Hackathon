@@ -5,6 +5,7 @@ import { logger } from "hono/logger";
 import { compress } from "hono/compress";
 import recordingsRouter from "./routes/recordings";
 import chunksRouter from "./routes/chunks";
+import transcriptionRouter from "./routes/transcription";
 
 const app = new Hono();
 
@@ -27,5 +28,6 @@ app.get("/", (c) => {
 // Mount routers
 app.route("/api/recordings", recordingsRouter);
 app.route("/api/chunks", chunksRouter);
+app.route("/api/transcribe", transcriptionRouter);
 
 export default app;

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { opfsStorage } from "@/lib/opfs-storage"
+import { getTranscriptionForChunk } from "@/lib/transcription"
 import { uploadChunk, computeChecksum, startRecording, completeRecording } from "@/lib/api-client"
 
 const SAMPLE_RATE = 16000
@@ -16,9 +17,18 @@ export interface WavChunk {
   uploaded: boolean
   acked: boolean
   error?: string
+  transcription?: string // Transcribed text
+  transcriptionConfidence?: number // 0-100
+  transcriptionStatus?: "pending" | "processing" | "completed" | "failed" // Transcription progress
 }
 
 export type RecorderStatus = "idle" | "requesting" | "recording" | "paused"
+
+interface UseRecorderState {
+  status: RecorderStatus
+  error: string | null
+  elapsed: number
+}
 
 interface UseRecorderOptions {
   chunkDuration?: number
@@ -80,6 +90,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
   const [chunks, setChunks] = useState<WavChunk[]>([])
   const [elapsed, setElapsed] = useState(0)
   const [stream, setStream] = useState<MediaStream | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const streamRef = useRef<MediaStream | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
@@ -152,13 +163,28 @@ export function useRecorder(options: UseRecorderOptions = {}) {
 
     setStatus("requesting")
     try {
+      setError(null)
+      
       // Initialize OPFS
-      await opfsStorage.initialize()
+      try {
+        await opfsStorage.initialize()
+      } catch (opfsError) {
+        setError(`Storage initialization failed: ${opfsError instanceof Error ? opfsError.message : "Unknown error"}`)
+        setStatus("idle")
+        return
+      }
 
-      // Start recording session
+      // Start recording session (with fallback if API unavailable)
       const sessionId = sessionIdRef.current
-      const recording = await startRecording(sessionId)
-      recordingIdRef.current = recording.id
+      let recording: any
+      try {
+        recording = await startRecording(sessionId)
+        recordingIdRef.current = recording.id
+      } catch (apiError) {
+        // Fallback: generate local ID if API is unavailable
+        recordingIdRef.current = `local-${crypto.randomUUID()}`
+        // Continue with local recording - will store in OPFS
+      }
 
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: deviceId
@@ -206,6 +232,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
             sequenceNumber,
             uploaded: false,
             acked: false,
+            transcriptionStatus: "pending",
           }
 
           // Save to OPFS
@@ -228,6 +255,48 @@ export function useRecorder(options: UseRecorderOptions = {}) {
 
           setChunks((prev) => [...prev, chunk])
           onChunkReady?.(chunk)
+
+          // Transcribe automatically in background
+          ;(async () => {
+            setChunks((prev) =>
+              prev.map((c) =>
+                c.chunkId === chunkId
+                  ? { ...c, transcriptionStatus: "processing" as const }
+                  : c
+              )
+            )
+
+            try {
+              const result = await getTranscriptionForChunk(blob, "en-US")
+              if (result) {
+                setChunks((prev) =>
+                  prev.map((c) =>
+                    c.chunkId === chunkId
+                      ? {
+                          ...c,
+                          transcription: result.text,
+                          transcriptionConfidence: result.confidence,
+                          transcriptionStatus: "completed" as const,
+                        }
+                      : c
+                  )
+                )
+              } else {
+                // Transcription unavailable but that's okay
+                setChunks((prev) =>
+                  prev.map((c) =>
+                    c.chunkId === chunkId ? { ...c, transcriptionStatus: "failed" as const } : c
+                  )
+                )
+              }
+            } catch (err) {
+              setChunks((prev) =>
+                prev.map((c) =>
+                  c.chunkId === chunkId ? { ...c, transcriptionStatus: "failed" as const } : c
+                )
+              )
+            }
+          })()
         }
       }
 
@@ -251,8 +320,9 @@ export function useRecorder(options: UseRecorderOptions = {}) {
           setElapsed(pausedElapsedRef.current + (Date.now() - startTimeRef.current) / 1000)
         }
       }, 100)
-    } catch (error) {
+    } catch (err) {
       setStatus("idle")
+      setError(`Recording failed: ${err instanceof Error ? err.message : "Unknown error"}`)
     }
   }, [deviceId, chunkThreshold, onChunkReady])
 
@@ -387,6 +457,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
     chunks,
     elapsed,
     stream,
+    error,
     clearChunks,
     uploadChunkToServer,
     uploadAllChunks,

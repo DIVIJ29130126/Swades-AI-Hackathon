@@ -47,6 +47,13 @@ export const chunks = pgTable(
       .notNull()
       .default("pending"),
     checksum: text("checksum"), // SHA256 of the chunk data for integrity verification
+    transcription: text("transcription"), // Transcribed text from audio
+    transcriptionConfidence: integer("transcription_confidence"), // Confidence 0-100
+    transcriptionLanguage: text("transcription_language").default("en-US"), // BCP 47 language tag
+    transcriptionStatus: text("transcription_status", {
+      enum: ["pending", "processing", "completed", "failed"],
+    })
+      .default("pending"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

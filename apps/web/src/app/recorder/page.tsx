@@ -50,33 +50,58 @@ function ChunkRow({ chunk, index }: { chunk: WavChunk; index: number }) {
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-sm border border-border/50 bg-muted/30 px-3 py-2">
-      <audio
-        ref={audioRef}
-        src={chunk.url}
-        onEnded={() => setPlaying(false)}
-        preload="none"
-      />
-      <span className="text-xs font-medium text-muted-foreground tabular-nums">
-        #{index + 1}
-      </span>
-      <span className="text-xs tabular-nums">{formatDuration(chunk.duration)}</span>
-      <span className="text-[10px] text-muted-foreground">16kHz PCM</span>
-      <div className="ml-auto flex gap-1">
-        <Button variant="ghost" size="icon-xs" onClick={toggle}>
-          {playing ? <Square className="size-3" /> : <Play className="size-3" />}
-        </Button>
-        <Button variant="ghost" size="icon-xs" onClick={download}>
-          <Download className="size-3" />
-        </Button>
+    <div className="space-y-2 rounded-sm border border-border/50 bg-muted/30 px-3 py-2">
+      {/* Chunk controls and metadata */}
+      <div className="flex items-center justify-between gap-3">
+        <audio
+          ref={audioRef}
+          src={chunk.url}
+          onEnded={() => setPlaying(false)}
+          preload="none"
+        />
+        <span className="text-xs font-medium text-muted-foreground tabular-nums">
+          #{index + 1}
+        </span>
+        <span className="text-xs tabular-nums">{formatDuration(chunk.duration)}</span>
+        <span className="text-[10px] text-muted-foreground">16kHz PCM</span>
+        <div className="ml-auto flex gap-1">
+          <Button variant="ghost" size="icon-xs" onClick={toggle}>
+            {playing ? <Square className="size-3" /> : <Play className="size-3" />}
+          </Button>
+          <Button variant="ghost" size="icon-xs" onClick={download}>
+            <Download className="size-3" />
+          </Button>
+        </div>
       </div>
+
+      {/* Transcription display */}
+      {chunk.transcriptionStatus && (
+        <div className="mt-2 space-y-1 border-t border-border/30 pt-2">
+          {chunk.transcriptionStatus === "processing" && (
+            <div className="text-xs text-muted-foreground">Transcribing...</div>
+          )}
+          {chunk.transcriptionStatus === "completed" && chunk.transcription && (
+            <div>
+              <div className="text-xs font-medium text-foreground">{chunk.transcription}</div>
+              {chunk.transcriptionConfidence && (
+                <div className="text-[10px] text-muted-foreground">
+                  Confidence: {chunk.transcriptionConfidence}%
+                </div>
+              )}
+            </div>
+          )}
+          {chunk.transcriptionStatus === "failed" && (
+            <div className="text-xs text-muted-foreground italic">Transcription unavailable</div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
 export default function RecorderPage() {
   const [deviceId] = useState<string | undefined>()
-  const { status, start, stop, pause, resume, chunks, elapsed, stream, clearChunks } =
+  const { status, start, stop, pause, resume, chunks, elapsed, stream, error, clearChunks } =
     useRecorder({ chunkDuration: 5, deviceId })
 
   const isRecording = status === "recording"
@@ -117,6 +142,13 @@ export default function RecorderPage() {
               mode="static"
             />
           </div>
+
+          {/* Error Display */}
+          {error && (
+            <div className="rounded-sm border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
 
           {/* Timer */}
           <div className="text-center font-mono text-3xl tabular-nums tracking-tight">
