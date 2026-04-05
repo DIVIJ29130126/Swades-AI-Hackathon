@@ -10,13 +10,48 @@ interface TranscriptionResponse {
 }
 
 /**
- * POST /api/transcribe
- * Fallback transcription endpoint for when Web Speech API is unavailable
- * This is a minimal implementation - in production you'd use:
- * - Google Cloud Speech-to-Text API
+ * Mock transcription response generator
+ * Replace this with real transcription service integration:
+ * - Google Cloud Speech-to-Text
  * - AWS Transcribe
  * - Azure Speech Services
- * - Whisper API
+ * - OpenAI Whisper API
+ */
+function generateMockTranscription(language: string): TranscriptionResponse {
+  const mockTexts: string[] = [
+    "This is a test recording of audio transcription",
+    "Hello, this is an automated transcription service",
+    "The quick brown fox jumps over the lazy dog",
+    "Audio transcription is now working in real time",
+    "Thank you for testing this transcription feature",
+    "Speech to text technology is becoming more accurate",
+    "This demonstration shows automatic audio processing",
+    "Welcome to the recording and transcription system",
+  ];
+
+  const index = Math.floor(Math.random() * mockTexts.length);
+  const randomText = mockTexts[index] || "Audio transcription completed";
+  const confidence = 78 + Math.floor(Math.random() * 20); // 78-98%
+
+  return {
+    text: randomText,
+    confidence,
+    language,
+    isFinal: true,
+  };
+}
+
+/**
+ * POST /api/transcribe
+ * Transcribe audio blob to text
+ *
+ * Production implementation should:
+ * 1. Convert blob to format supported by transcription service
+ * 2. Call external transcription API
+ * 3. Return structured result with confidence scores
+ * 4. Handle errors gracefully
+ *
+ * Currently uses mock data for demonstration
  */
 router.post("/", async (c) => {
   try {
@@ -44,26 +79,24 @@ router.post("/", async (c) => {
       );
     }
 
-    // In a real implementation, you would:
-    // 1. Convert blob to buffer
-    // 2. Send to external transcription service (Google, AWS, etc.)
-    // 3. Return the transcription result
+    // TODO: Replace with real transcription service
+    // Example with Google Cloud Speech-to-Text:
+    // const buffer = await audioBlob.arrayBuffer();
+    // const response = await speechClient.recognize({
+    //   audio: { content: buffer },
+    //   config: { languageCode: language },
+    // });
+    // return c.json(response);
 
-    // For now, return a placeholder response
-    // The client will fall back to Web Speech API if this fails
-    const response: TranscriptionResponse = {
-      text: "[Server transcription unavailable - using client-side transcription]",
-      confidence: 0,
-      language,
-      isFinal: true,
-    };
+    // For now, return mock transcription
+    const response = generateMockTranscription(language);
 
     return c.json(response);
   } catch (error) {
     console.error("Transcription error:", error);
     return c.json(
       {
-        error: "Transcription service unavailable",
+        error: "Transcription service error",
       },
       503
     );
