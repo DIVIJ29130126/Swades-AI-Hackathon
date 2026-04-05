@@ -3,10 +3,34 @@ import { env } from "@my-better-t-app/env/server";
 
 const router = new Hono();
 
+/**
+ * Map language codes to human-readable labels
+ */
+function getLanguageLabel(langCode: string): string {
+  const languageMap: Record<string, string> = {
+    en: "🇬🇧 ENGLISH",
+    fr: "🇫🇷 FRENCH",
+    es: "🇪🇸 SPANISH",
+    de: "🇩🇪 GERMAN",
+    it: "🇮🇹 ITALIAN",
+    pt: "🇵🇹 PORTUGUESE",
+    ru: "🇷🇺 RUSSIAN",
+    ja: "🇯🇵 JAPANESE",
+    zh: "🇨🇳 CHINESE",
+    hi: "🇮🇳 HINDI",
+    ar: "🇸🇦 ARABIC",
+    ko: "🇰🇷 KOREAN",
+  };
+
+  const code = langCode.split("-")[0] || langCode;
+  return languageMap[code] || `${code.toUpperCase()}`;
+}
+
 interface TranscriptionResponse {
   text: string;
   confidence: number;
   language: string;
+  languageLabel: string;
   isFinal: boolean;
 }
 
@@ -38,12 +62,16 @@ async function transcribeWithWhisper(blob: Blob, language: string): Promise<Tran
     throw new Error(`Whisper API error: ${response.status} - ${error}`);
   }
 
-  const data = (await response.json()) as { text?: string };
+  const data = (await response.json()) as { text?: string; language?: string };
+
+  // Whisper returns language code (e.g., "en", "fr")
+  const detectedLanguage = data.language || language.split("-")[0] || "en";
 
   return {
     text: data.text || "",
     confidence: 92, // Whisper is very accurate
-    language,
+    language: detectedLanguage,
+    languageLabel: getLanguageLabel(detectedLanguage),
     isFinal: true,
   };
 }
@@ -85,15 +113,17 @@ async function transcribeWithGoogleCloud(
     throw new Error(`Google Cloud API error: ${response.status} - ${error}`);
   }
 
-  const data = (await response.json()) as { results?: Array<{ alternatives?: Array<{ transcript?: string; confidence?: number }> }> };
+  const data = (await response.json()) as { results?: Array<{ alternatives?: Array<{ transcript?: string; confidence?: number } >; languageCode?: string }> };
 
   const transcript = data.results?.[0]?.alternatives?.[0]?.transcript || "";
   const confidence = Math.round((data.results?.[0]?.alternatives?.[0]?.confidence || 0.85) * 100);
+  const detectedLanguage = data.results?.[0]?.languageCode || language;
 
   return {
     text: transcript,
     confidence,
-    language,
+    language: detectedLanguage,
+    languageLabel: getLanguageLabel(detectedLanguage),
     isFinal: true,
   };
 }

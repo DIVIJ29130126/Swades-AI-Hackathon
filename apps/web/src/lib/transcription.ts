@@ -7,7 +7,8 @@
 export interface TranscriptionResult {
   text: string
   confidence: number // 0-100
-  language: string // BCP 47 language tag
+  language: string // Language code (e.g., "en", "fr", "hi")
+  languageLabel: string // Human-readable label (e.g., "ENGLISH", "FRENCH", "HINDI")
   isFinal: boolean
 }
 
@@ -38,11 +39,33 @@ export async function transcribeAudio(blob: Blob, language = "en-US"): Promise<T
       text: data.text || "",
       confidence: data.confidence || 90,
       language: data.language || language,
+      languageLabel: data.languageLabel || getLanguageLabel(data.language || language),
       isFinal: true,
     }
   } catch (error) {
     throw new Error(`Transcription failed: ${error instanceof Error ? error.message : String(error)}`)
   }
+}
+
+/**
+ * Map language codes to human-readable labels with flag emojis
+ */
+function getLanguageLabel(langCode: string): string {
+  const languageMap: Record<string, string> = {
+    "en": "🇬🇧 ENGLISH",
+    "fr": "🇫🇷 FRENCH",
+    "es": "🇪🇸 SPANISH",
+    "de": "🇩🇪 GERMAN",
+    "it": "🇮🇹 ITALIAN",
+    "pt": "🇵🇹 PORTUGUESE",
+    "ru": "🇷🇺 RUSSIAN",
+    "ja": "🇯🇵 JAPANESE",
+    "zh": "🇨🇳 CHINESE",
+    "hi": "🇮🇳 HINDI",
+    "ar": "🇸🇦 ARABIC",
+    "ko": "🇰🇷 KOREAN",
+  }
+  return languageMap[langCode.split("-")[0] || langCode] || `${langCode.toUpperCase()}`
 }
 
 

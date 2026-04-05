@@ -19,6 +19,8 @@ export interface WavChunk {
   error?: string
   transcription?: string // Transcribed text
   transcriptionConfidence?: number // 0-100
+  transcriptionLanguage?: string // Detected language (e.g., "en", "fr", "hi")
+  transcriptionLanguageLabel?: string // Human-readable (e.g., "ENGLISH", "FRENCH")
   transcriptionStatus?: "pending" | "processing" | "completed" | "failed" // Transcription progress
 }
 
@@ -233,6 +235,8 @@ export function useRecorder(options: UseRecorderOptions = {}) {
             uploaded: false,
             acked: false,
             transcriptionStatus: "pending",
+            transcriptionLanguage: undefined,
+            transcriptionLanguageLabel: undefined,
           }
 
           // Save to OPFS
@@ -276,6 +280,8 @@ export function useRecorder(options: UseRecorderOptions = {}) {
                           ...c,
                           transcription: result.text,
                           transcriptionConfidence: result.confidence,
+                          transcriptionLanguage: result.language,
+                          transcriptionLanguageLabel: result.languageLabel,
                           transcriptionStatus: "completed" as const,
                         }
                       : c

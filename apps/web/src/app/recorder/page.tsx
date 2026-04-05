@@ -76,13 +76,23 @@ function ChunkRow({ chunk, index }: { chunk: WavChunk; index: number }) {
 
       {/* Transcription display */}
       {chunk.transcriptionStatus && (
-        <div className="mt-2 space-y-1 border-t border-border/30 pt-2">
+        <div className="mt-2 space-y-2 border-t border-border/30 pt-2">
           {chunk.transcriptionStatus === "processing" && (
             <div className="text-xs text-muted-foreground">Transcribing...</div>
           )}
           {chunk.transcriptionStatus === "completed" && chunk.transcription && (
-            <div>
-              <div className="text-xs font-medium text-foreground">{chunk.transcription}</div>
+            <div className="space-y-2">
+              {/* Language Label */}
+              {chunk.transcriptionLanguageLabel && (
+                <div className="text-xs font-semibold text-blue-400">
+                  {chunk.transcriptionLanguageLabel}
+                </div>
+              )}
+              {/* Transcribed Text */}
+              <div className="text-xs text-foreground leading-relaxed">
+                {chunk.transcription}
+              </div>
+              {/* Confidence Score */}
               {chunk.transcriptionConfidence && (
                 <div className="text-[10px] text-muted-foreground">
                   Confidence: {chunk.transcriptionConfidence}%
