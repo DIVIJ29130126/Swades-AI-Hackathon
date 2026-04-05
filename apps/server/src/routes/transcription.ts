@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { env } from "@my-better-t-app/env/server";
 
 const router = new Hono();
 
@@ -10,31 +11,87 @@ interface TranscriptionResponse {
 }
 
 /**
- * Mock transcription response generator
- * Replace this with real transcription service integration:
- * - Google Cloud Speech-to-Text
- * - AWS Transcribe
- * - Azure Speech Services
- * - OpenAI Whisper API
+ * Transcribe using OpenAI Whisper API
+ * Requires OPENAI_API_KEY environment variable
  */
-function generateMockTranscription(language: string): TranscriptionResponse {
-  const mockTexts: string[] = [
-    "This is a test recording of audio transcription",
-    "Hello, this is an automated transcription service",
-    "The quick brown fox jumps over the lazy dog",
-    "Audio transcription is now working in real time",
-    "Thank you for testing this transcription feature",
-    "Speech to text technology is becoming more accurate",
-    "This demonstration shows automatic audio processing",
-    "Welcome to the recording and transcription system",
-  ];
+async function transcribeWithWhisper(blob: Blob, language: string): Promise<TranscriptionResponse> {
+  if (!env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY not configured");
+  }
 
-  const index = Math.floor(Math.random() * mockTexts.length);
-  const randomText = mockTexts[index] || "Audio transcription completed";
-  const confidence = 78 + Math.floor(Math.random() * 20); // 78-98%
+  const formData = new FormData();
+  formData.append("file", blob, "audio.wav");
+  formData.append("model", "whisper-1");
+  const languageCode = language.split("-")[0] || language; // Convert en-US to en
+  formData.append("language", languageCode);
+
+  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Whisper API error: ${response.status} - ${error}`);
+  }
+
+  const data = (await response.json()) as { text?: string };
 
   return {
-    text: randomText,
+    text: data.text || "",
+    confidence: 92, // Whisper is very accurate
+    language,
+    isFinal: true,
+  };
+}
+
+/**
+ * Transcribe using Google Cloud Speech-to-Text API
+ * Requires GOOGLE_CLOUD_API_KEY environment variable
+ */
+async function transcribeWithGoogleCloud(
+  blob: Blob,
+  language: string
+): Promise<TranscriptionResponse> {
+  if (!env.GOOGLE_CLOUD_API_KEY) {
+    throw new Error("GOOGLE_CLOUD_API_KEY not configured");
+  }
+
+  const buffer = await blob.arrayBuffer();
+  const base64Audio = Buffer.from(buffer).toString("base64");
+
+  const response = await fetch(
+    `https://speech.googleapis.com/v1/speech:recognize?key=${env.GOOGLE_CLOUD_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        audio: { content: base64Audio },
+        config: {
+          encoding: "LINEAR16",
+          sampleRateHertz: 16000,
+          languageCode: language,
+          model: "default",
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Google Cloud API error: ${response.status} - ${error}`);
+  }
+
+  const data = (await response.json()) as { results?: Array<{ alternatives?: Array<{ transcript?: string; confidence?: number }> }> };
+
+  const transcript = data.results?.[0]?.alternatives?.[0]?.transcript || "";
+  const confidence = Math.round((data.results?.[0]?.alternatives?.[0]?.confidence || 0.85) * 100);
+
+  return {
+    text: transcript,
     confidence,
     language,
     isFinal: true,
@@ -43,27 +100,19 @@ function generateMockTranscription(language: string): TranscriptionResponse {
 
 /**
  * POST /api/transcribe
- * Transcribe audio blob to text
+ * Transcribe audio to text using real transcription services
  *
- * Production implementation should:
- * 1. Convert blob to format supported by transcription service
- * 2. Call external transcription API
- * 3. Return structured result with confidence scores
- * 4. Handle errors gracefully
- *
- * Currently uses mock data for demonstration
+ * Priority order:
+ * 1. OpenAI Whisper API (if OPENAI_API_KEY set)
+ * 2. Google Cloud Speech-to-Text (if GOOGLE_CLOUD_API_KEY set)
+ * 3. Error if neither is configured
  */
 router.post("/", async (c) => {
   try {
     const contentType = c.req.header("content-type");
 
     if (!contentType?.includes("multipart")) {
-      return c.json(
-        {
-          error: "Expected multipart/form-data with audio blob",
-        },
-        400
-      );
+      return c.json({ error: "Expected multipart/form-data with audio blob" }, 400);
     }
 
     const formData = await c.req.formData();
@@ -71,34 +120,59 @@ router.post("/", async (c) => {
     const language = (formData.get("language") as string) || "en-US";
 
     if (!audioBlob) {
+      return c.json({ error: "Missing audio blob" }, 400);
+    }
+
+    // Try services in order of preference
+    let lastError: Error | null = null;
+
+    if (env.OPENAI_API_KEY) {
+      try {
+        const result = await transcribeWithWhisper(audioBlob, language);
+        return c.json(result);
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        console.warn("Whisper transcription failed:", lastError.message);
+      }
+    }
+
+    if (env.GOOGLE_CLOUD_API_KEY) {
+      try {
+        const result = await transcribeWithGoogleCloud(audioBlob, language);
+        return c.json(result);
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        console.warn("Google Cloud transcription failed:", lastError.message);
+      }
+    }
+
+    // No API keys configured
+    if (!env.OPENAI_API_KEY && !env.GOOGLE_CLOUD_API_KEY) {
       return c.json(
         {
-          error: "Missing audio blob",
+          error: "Transcription service not configured. Set OPENAI_API_KEY or GOOGLE_CLOUD_API_KEY environment variables.",
+          details: "Please configure at least one transcription service API key",
         },
-        400
+        503
       );
     }
 
-    // TODO: Replace with real transcription service
-    // Example with Google Cloud Speech-to-Text:
-    // const buffer = await audioBlob.arrayBuffer();
-    // const response = await speechClient.recognize({
-    //   audio: { content: buffer },
-    //   config: { languageCode: language },
-    // });
-    // return c.json(response);
-
-    // For now, return mock transcription
-    const response = generateMockTranscription(language);
-
-    return c.json(response);
+    // Both services failed
+    return c.json(
+      {
+        error: "Transcription failed",
+        details: lastError?.message || "Unknown error",
+      },
+      503
+    );
   } catch (error) {
-    console.error("Transcription error:", error);
+    console.error("Transcription endpoint error:", error);
     return c.json(
       {
         error: "Transcription service error",
+        details: error instanceof Error ? error.message : String(error),
       },
-      503
+      500
     );
   }
 });

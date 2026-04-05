@@ -7,6 +7,9 @@ export const env = createEnv({
     DATABASE_URL: z.string().min(1),
     CORS_ORIGIN: z.url(),
     NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+    // Transcription API keys (optional)
+    OPENAI_API_KEY: z.string().optional(),
+    GOOGLE_CLOUD_API_KEY: z.string().optional(),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,
