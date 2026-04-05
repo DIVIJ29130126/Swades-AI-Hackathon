@@ -16,7 +16,21 @@ Client (Browser)
         └── Re-send from OPFS → bucket
 ```
 
-**Main objective:** In all cases, the recording data stays accurate. OPFS acts as the durable client-side buffer — chunks are only cleared after the bucket and DB are both confirmed in sync.
+## Main objective:** In all cases, the recording data stays accurate. OPFS acts as the durable client-side buffer — chunks are only cleared after the bucket and DB are both confirmed in sync.
+
+## ✅ Implementation Status
+
+The complete reliable transcription pipeline is now **fully implemented**:
+
+- ✅ **Database Schema** — Recording, chunks, ACKs, upload failures audit trail
+- ✅ **OPFS Storage** — Durable client-side persistence with metadata
+- ✅ **Retry Logic** — Exponential backoff for transient failures
+- ✅ **Hono API** — Recording, chunk upload, status, reconciliation endpoints
+- ✅ **Reconciliation** — Automatic detection & recovery of lost chunks
+- ✅ **Integrity** — SHA256 checksums on every chunk
+- ✅ **Error Recovery** — Comprehensive error handling with audit trail
+
+**See [IMPLEMENTATION.md](./IMPLEMENTATION.md) for full architecture & [QUICK_START.md](./QUICK_START.md) for usage guide.**
 
 ### Flow Details
 
