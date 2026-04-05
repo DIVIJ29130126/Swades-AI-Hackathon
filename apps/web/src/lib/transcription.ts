@@ -22,19 +22,26 @@ export async function transcribeAudio(blob: Blob, language = "en-US"): Promise<T
   formData.append("language", language)
 
   try {
+    console.log("[Transcription] Starting transcription request...", { blobSize: blob.size, language })
+    
     const response = await fetch("/api/transcribe", {
       method: "POST",
       body: formData,
     })
 
+    console.log("[Transcription] Got response:", { status: response.status, statusText: response.statusText })
+
     if (!response.ok) {
       const error = await response.json()
+      console.error("[Transcription] Response error:", error)
       throw new Error(
-        error.details || `Server returned ${response.status}: ${response.statusText}`
+        error.details || error.error || `Server returned ${response.status}: ${response.statusText}`
       )
     }
 
     const data = await response.json()
+    console.log("[Transcription] Success:", { text: data.text?.substring(0, 50), confidence: data.confidence, language: data.language })
+    
     return {
       text: data.text || "",
       confidence: data.confidence || 90,
@@ -43,7 +50,9 @@ export async function transcribeAudio(blob: Blob, language = "en-US"): Promise<T
       isFinal: true,
     }
   } catch (error) {
-    throw new Error(`Transcription failed: ${error instanceof Error ? error.message : String(error)}`)
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    console.error("[Transcription] Failed:", errorMsg)
+    throw new Error(`Transcription failed: ${errorMsg}`)
   }
 }
 
