@@ -1,0 +1,11 @@
+{
+  "buildCommand": "npm run build -- --filter web",
+  "installCommand": "npm install",
+  "outputDirectory": "apps/web/.next",
+  "framework": "nextjs",
+  "git": {
+    "deploymentEnabled": {
+      "main": true
+    }
+  }
+}
